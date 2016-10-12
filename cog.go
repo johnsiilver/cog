@@ -1,15 +1,19 @@
 /*
 Package cog provides the framework for creating a Cog plugin. Cog plugins are
-simply binaries that accept two arguments via the command line, argv[1] is a unix port to listen on and
-argv[2] is a unix port to write on.  The plugin then brings up a GRPC service and communicates what
-port it comes up on via the unix socket back to the caller.
+simply binaries that accept one arguments via the command line, argv[1] is a
+unix port to listen on.  The plugin then brings up a GRPC service and
+communicates what port it comes up on via the unix socket back to the caller.
 
-Cog plugins receive a proto.Message as its input.  They write back a proto.Message that is sent back to the caller along
-with a status message and optionally a pretty print message for display in things like a browser.
+Cog plugins receive a proto.Message as its input.  They write back a
+proto.Message that is sent back to the caller along with a status message and
+optionally a pretty print message for display in things like a browser.
 
-These plugins can then be dynamically loaded by calling applications and provide hitless upgrades to various software stacks.
+These plugins can then be dynamically loaded by calling applications and
+provide hitless upgrades to various software stacks.
 
-Here is a simple example that simply writes a status message of success back to the caller.
+Here is a simple example that simply writes a status message of success back
+to the caller:
+
 	// cog merely implements the Cog interface called Cog.  The interface requires
 	// Execute()/Describe()/Validate()/ArgsProto().
 	type cog struct {}
