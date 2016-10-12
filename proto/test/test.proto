@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message Args {
+  string Say = 1;
+};

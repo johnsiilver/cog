@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+enum Status {
+  // The status hasn't been processed yet.
+  UNKNOWN = 0;
+
+  // Indicates that the execution was considered a success.
+  SUCCESS = 1;
+
+  // Indicates that execution had a failure, but could be retried.
+  FAILURE = 2;
+
+  // Plugin failed and should not be retried.
+  FAILURE_NO_RETRIES = 3;
+}; // Next ID: 4
+
+enum ArgsType {
+  // The arguments will be encoded in JSON format.
+  JSON = 0;
+}  // Next ID = 1;
+
+message Args {
+  // The textual encoding of the arguments.  No matter what the type is, it must
+  // be textual encoded, never binary encoded.  These arguments are always
+  // translated to a binary proto in the plugin.
+  ArgsType args_type = 1;
+
+  // The arguments to the plugin.  This will be some textual representation of
+  // the plugin's protocol buffer.
+  bytes args = 2;
+}; // Next ID: 3
+
+message Out {
+  // The status for a run of the cog.
+  Status status = 1;
+
+  // The type of textual encoding used on the output.  This will be the same
+  // as the encoding of the input.
+  ArgsType args_type = 2;
+
+  // The output from the cog in ArgsType textual encoding.
+  bytes output = 3;
+}; // Next ID: 4;
+
+// Description is used to describe a Cog. This allows us to
+// auto-generate documentation and restrict usage.
+message Description {
+  // This is the owner of the Cog, which should be an email of some sort.
+  string owner = 1;
+
+  // This should describe what the plugin does.
+  string description = 2;
+
+  // Tags are used to provide key words that can be used for searching the
+  // plugin data store.
+  repeated string tags = 3;
+
+  // This is the maximum time a plugin can take to shutdown before it receives
+  // a kill -9. This defaults to 30 seconds and has a maximum value of
+  // 30 minutes.  The value is recorded in seconds.
+  int32 max_shutdown_time = 7;
+}; // Next ID: 8;
+
+// Server details information about the service that called the cog.
+message Server {
+  // Represents a service endpoint that ran the cog.
+  string endpoint = 1;
+
+  // The id of the Labor executing the plugin.
+  string id = 2;
+};
+
+message ExecuteRequest {
+  // The arguements to the cog.
+  Args args = 1;
+  // This is the name of the real user account that is trying to run the
+  // plugin. As Marmot is the actual caller, this allows the cog to
+  // try and pass the user who requested the workflow. The plugin can in turn
+  // pass this to remote system if it supports delegation.
+  string real_user = 2;
+
+  // This provides infomration about gthe server that is executing
+  // the cog. This should not be set by the user, as it will just
+  // be overwritten.
+  Server server = 3;
+};
+
+message ExecuteResponse {
+  Out out = 1;
+};
+
+message DescribeRequest {};
+
+message DescribeResponse {
+  Description description = 1;
+};
+
+message ValidateRequest {
+  Args args = 1;
+};
+
+message ValidateResponse {};
+
+service CogService {
+  // Executes the cog.
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse) {};
+
+  // Describes the cog.
+  rpc Describe(DescribeRequest) returns (DescribeResponse) {};
+
+  // Validate takes an argument for a cog and validates the cog will
+  // accept it. If not, it returns an error.
+  rpc Validate(ValidateRequest) returns (ValidateResponse) {};
+};
