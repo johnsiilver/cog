@@ -2,7 +2,9 @@
 Package cog provides the framework for creating a Cog plugin. Cog plugins are
 simply binaries that accept one arguments via the command line, argv[1] is a
 unix port to listen on.  The plugin then brings up a GRPC service and
-communicates what port it comes up on via the unix socket back to the caller.
+communicates what port it comes up on via the unix socket back to the caller.  A
+security token is also exchanged to the client, which must used the token in
+all GRPC communication with the plugin.
 
 Cog plugins receive a proto.Message as its input.  They write back a
 proto.Message that is sent back to the caller along with a status message and
@@ -60,6 +62,9 @@ to the caller:
 package cog
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"flag"
@@ -174,9 +179,17 @@ type service struct {
 
 	// addr is the gRPC ip/port that the service is listening on.
 	addr string
+
+	// token is a security token that the client must always send the plugin
+	// or the plugin crashes.
+	token []byte
 }
 
 func (s *service) Execute(ctx context.Context, req *pb.ExecuteRequest) (*pb.ExecuteResponse, error) {
+	if !bytes.Equal(req.Token, s.token) {
+		panic("expected security token was not present from the client.  Third party hack attempt likely.")
+	}
+
 	args, err := s.inArgs(req.Args)
 	if err != nil {
 		return nil, err
@@ -308,6 +321,7 @@ func Start(c Cog, opts ...StartOption) error {
 	s := &service{
 		plugin: c,
 		user:   u.Username,
+		token:  token(),
 	}
 
 	for _, opt := range opts {
@@ -346,6 +360,15 @@ func Start(c Cog, opts ...StartOption) error {
 		return fmt.Errorf("error trying to write address: %s", err)
 	}
 
+	log.Info("sending token size")
+	if err := binary.Write(uconn, binary.BigEndian, int64(len(s.token))); err != nil {
+		return fmt.Errorf("error trying to send token header: %s", err)
+	}
+
+	if _, err := uconn.Write(s.token); err != nil {
+		return fmt.Errorf("error trying to write token: %s", err)
+	}
+
 	ack := make([]byte, len("ack"))
 	log.Infof("waiting for ack")
 	if _, err := uconn.Read(ack); err != nil {
@@ -374,4 +397,17 @@ func validateDescribe(p Cog) error {
 		return fmt.Errorf("Describe(): MaxShutdownTime cannot exceed 30 minutes")
 	}
 	return nil
+}
+
+// token generates a crypto random 32 character token in []byte form.
+func token() []byte {
+	const size = 32
+
+	rb := make([]byte, size)
+	_, err := rand.Read(rb)
+	if err != nil {
+		panic(err)
+	}
+
+	return []byte(base64.URLEncoding.EncodeToString(rb))
 }

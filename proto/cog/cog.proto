@@ -83,6 +83,10 @@ message ExecuteRequest {
   // the cog. This should not be set by the user, as it will just
   // be overwritten.
   Server server = 3;
+
+  // A token that identifies the client that started the plugin to the plugin.
+  // If a request is sent without this token, the plugin panics.
+  bytes token = 4;
 };
 
 message ExecuteResponse {

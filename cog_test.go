@@ -57,7 +57,12 @@ func TestCog(t *testing.T) {
 		t.Fatal("listen error:", err)
 	}
 
+	if err = os.Chmod(l.Addr().String(), 0700); err != nil {
+		t.Fatal(err)
+	}
+
 	done := make(chan []byte)
+	var tok []byte
 	go func() {
 		defer close(done)
 
@@ -74,7 +79,18 @@ func TestCog(t *testing.T) {
 
 		log.Infof("reading address")
 		addr := make([]byte, size)
-		if _, err := fd.Read(addr); err != nil {
+		if _, err = fd.Read(addr); err != nil {
+			t.Fatal(err)
+		}
+
+		log.Infof("reading token size")
+		if err = binary.Read(fd, binary.BigEndian, &size); err != nil {
+			t.Fatal(err)
+		}
+
+		log.Infof("reading token")
+		tok = make([]byte, size)
+		if _, err := fd.Read(tok); err != nil {
 			t.Fatal(err)
 		}
 
@@ -119,6 +135,7 @@ func TestCog(t *testing.T) {
 				Args:     []byte(args),
 			},
 			Server: &pb.Server{},
+			Token:  tok,
 		},
 	)
 	if err != nil {
