@@ -20,13 +20,15 @@ to the caller:
 	// Execute()/Describe()/Validate()/ArgsProto().
 	type cog struct {}
 
-	// Execute receives its arguments via "args", "out" represents the results of the Cog's run.
+	// Execute receives its arguments via "args", "out" represents the results of
+	// the Cog's run.
 	func (*cog) Execute(ctx context.Context, args proto.Message, out *pb.Out) error
 		out.Status = pb.SUCCESS
 		return nil
 	}
 
-	// Describe returns information about the plugin, including permissions and tags to allow searching via an online repository.
+	// Describe returns information about the plugin, including permissions and
+	// tags to allow searching via an online repository.
 	func (*cog) Describe() *pb.Description {
 		return &pb.Description{
 			Owner: ("doak"),
@@ -35,16 +37,18 @@ to the caller:
 		}
 	}
 
-	// Validate validates the arguments that are sent or may be sent to the plugin. Validate is always called
-  // during Execute(). You should never invoke this in your code.
+	// Validate validates the arguments that are sent or may be sent to
+	// the plugin. Validate is always called during Execute(). You should never
+	// invoke this in your code.
 	func (*cog) Validate(args proto.Message) error {
     a := args.(myproto.Args)
 	  // Check your arguments are valid here.
 		return nil
 	}
 
-  // ArgsProto returns a blank copy of the argument proto you define. This allows the Cog middleware to marshal/unmarshal
-  // JSON or Proto that is in []byte form into your arguments. This saves you a lot of time and bother.
+  // ArgsProto returns a blank copy of the argument proto you define. This
+	// allows the Cog middleware to marshal/unmarshal JSON or Proto that is in
+	// []byte form into your arguments. This saves you a lot of time and bother.
   func (*cog) ArgsProto() proto.Message {
     return &myproto.Args{}
   }
@@ -159,10 +163,12 @@ type Cog interface {
 	Describe() *pb.Description
 
 	// Validate validates that the "p" argument would be accepted by the plugin.
-	// This method is always called before Execute() is called, never invoke it in the plugin.
+	// This method is always called before Execute() is called, never
+	// invoke it in the plugin.
 	Validate(p proto.Message) error
 
-	// ArgsProto returns an empty proto message used to represent the arguments to an Execute() call with In.Args.
+	// ArgsProto returns an empty proto message used to represent the
+	// arguments to an Execute() call with In.Args.
 	ArgsProto() proto.Message
 }
 
@@ -292,9 +298,9 @@ func (s *service) socket() error {
 // StartOption is an optional argument for starting a Cog.
 type StartOption func(s *service)
 
-// Sock allows setting the unix socket name of which the plugin receives confirmation
-// the client received information from the caller. By default it reads this from the command
-// line arguments when starting up.
+// Sock allows setting the unix socket name of which the plugin receives
+// confirmation the client received information from the caller. By default
+// it reads this from the command line arguments when starting up.
 func Sock(p string) StartOption {
 	return func(s *service) {
 		s.sock = p
@@ -307,7 +313,8 @@ func Start(c Cog, opts ...StartOption) error {
 		return err
 	}
 
-	// The user passed the -plugin_desc flag, which means we print out the description proto to the screen and exit.
+	// The user passed the -plugin_desc flag, which means we print out the
+	// description proto to the screen and exit.
 	if *cogDesc {
 		fmt.Println(proto.MarshalTextString(c.Describe()))
 		os.Exit(0)
