@@ -375,6 +375,16 @@ func Start(c Cog, opts ...StartOption) error {
 		return fmt.Errorf("error waiting for ack message: %s", err)
 	}
 
+	// Launch a goroutine that polls for our parent process to die.  If it does,
+	// we should exit.  We know this is the case if our parent process becomes 1.
+	go func() {
+		for _ = range time.Tick(5 * time.Second) {
+			if os.Getppid() == 1 {
+				log.Exitf("parent process died, exiting")
+			}
+		}
+	}()
+
 	return nil
 }
 
