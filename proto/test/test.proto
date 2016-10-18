@@ -1,5 +1,11 @@
 syntax = "proto3";
 
+package cog_test;
+
 message Args {
   string Say = 1;
+};
+
+message Response {
+  string Answer = 1;
 };

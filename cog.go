@@ -92,6 +92,8 @@ var (
 	cogDesc = flag.Bool("cog_desc", false, "The description of the Cog will be written out in proto text format and the binary will stop.")
 )
 
+var jsonMarshaller = &jsonpb.Marshaler{Indent: "\t"}
+
 // Status represents the cog's return status.
 type Status int
 
@@ -128,7 +130,7 @@ func (o Out) toProto(t pb.ArgsType) (*pb.Out, error) {
 			p.Output = []byte{}
 			break
 		}
-		s, err := (&jsonpb.Marshaler{Indent: "\t"}).MarshalToString(o.Output)
+		s, err := jsonMarshaller.MarshalToString(o.Output)
 		if err != nil {
 			return nil, err
 		}
@@ -211,7 +213,6 @@ func (s *service) Execute(ctx context.Context, req *pb.ExecuteRequest) (*pb.Exec
 	done := make(chan error, 1)
 	go func() {
 		defer close(done)
-		log.Infof("%v", req.RealUser)
 		out, err = s.plugin.Execute(ctx, args, req.RealUser, req.Server.Endpoint, req.Server.Id)
 		if err != nil {
 			done <- err
@@ -290,7 +291,10 @@ func (s *service) socket() error {
 		if ln < 2 {
 			return fmt.Errorf("binary launched with incorrect arguments, should be: <command> <unix socket name>, got: %v", os.Args)
 		}
-		s.sock = os.Args[ln-1]
+		log.Infof("cog's args are: %#v", os.Args)
+		log.Infof("socket is: %q", os.Args[1])
+
+		s.sock = os.Args[1]
 	}
 	return nil
 }

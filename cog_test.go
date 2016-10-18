@@ -111,7 +111,7 @@ func TestCog(t *testing.T) {
 	var addr []byte
 	select {
 	case addr = <-done:
-		fmt.Println(string(addr))
+		log.Infof(string(addr))
 	case <-time.After(20 * time.Second):
 		t.Fatal("never saw addr")
 	}

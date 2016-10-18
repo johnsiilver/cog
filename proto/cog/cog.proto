@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+package cog;
+
 enum Status {
   // The status hasn't been processed yet.
   UNKNOWN = 0;
@@ -70,6 +72,7 @@ message Server {
   string id = 2;
 };
 
+// ExecuteRequest holds the request for a Cog to do something.
 message ExecuteRequest {
   // The arguements to the cog.
   Args args = 1;
@@ -89,20 +92,25 @@ message ExecuteRequest {
   bytes token = 4;
 };
 
+// ExecuteResponse is the response from the plugin.
 message ExecuteResponse {
   Out out = 1;
 };
 
+// DescribeRequest is a request for the plugin's description.
 message DescribeRequest {};
 
+// DescribeResponse holds the description of the plugin.
 message DescribeResponse {
   Description description = 1;
 };
 
+// ValidateRequest is used to validate the arguments of a request.
 message ValidateRequest {
   Args args = 1;
 };
 
+// ValidateResponse is the response from a validate request.
 message ValidateResponse {};
 
 service CogService {
