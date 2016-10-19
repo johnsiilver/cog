@@ -1,10 +1,10 @@
 package client
 
 import (
-	"bytes"
-	"encoding/binary"
+	"crypto/sha256"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"regexp"
 	"syscall"
@@ -118,9 +118,17 @@ func (localLoader) version(cogPath string) ([]byte, error) {
 		return nil, fmt.Errorf("cogPath cannot be a directory")
 	}
 
-	buff := new(bytes.Buffer)
-	if err := binary.Write(buff, binary.BigEndian, stat.Size()); err != nil {
+	f, err := os.Open(cogPath)
+	if err != nil {
 		return nil, err
 	}
-	return buff.Bytes(), nil
+	defer f.Close()
+
+	hasher := sha256.New()
+
+	if _, err := io.Copy(hasher, f); err != nil {
+		log.Fatal(err)
+	}
+
+	return hasher.Sum(nil), nil
 }

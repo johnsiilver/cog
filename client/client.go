@@ -78,11 +78,16 @@ func (c *Client) ReloadChanged() error {
 			if err != nil {
 				return err
 			}
-			v, err := load.version(cogi.cogPath)
+			fp, err := filePath(cogi.cogPath)
+			if err != nil {
+				return nil
+			}
+			v, err := load.version(fp)
 			if err != nil {
 				return err
 			}
-			if bytes.Equal(cogi.version, v) {
+			if !bytes.Equal(cogi.version, v) {
+				log.Infof("cog %q version changed, loading new version", cogi.cogPath)
 				if err := c.Unload(cogi.cogPath); err != nil {
 					return err
 				}
@@ -141,14 +146,14 @@ func (c *Client) Load(cogPath string) error {
 		return err
 	}
 
-	ver, err := load.version(cogPath)
-	if err != nil {
-		return err
-	}
-
 	fp, err := filePath(cogPath)
 	if err != nil {
 		return nil
+	}
+
+	ver, err := load.version(fp)
+	if err != nil {
+		return err
 	}
 
 	localPath := path.Join(os.TempDir(), path.Base(fp))

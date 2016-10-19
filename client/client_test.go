@@ -1,16 +1,22 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"path"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
+	log "github.com/golang/glog"
 	pb "github.com/johnsiilver/cog/proto/cog"
 	tpb "github.com/johnsiilver/cog/proto/test"
 	"github.com/kylelemons/godebug/pretty"
+	"github.com/pborman/uuid"
 )
 
 var jsonMarshaller = &jsonpb.Marshaler{Indent: "\t"}
@@ -125,4 +131,84 @@ func TestUnload(t *testing.T) {
 			break
 		}
 	}
+}
+
+func TestReloadChanged(t *testing.T) {
+	loader := localLoader{}
+	cli, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srcFP, err := filePath(cogPath("success"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loc := path.Join(os.TempDir(), uuid.New())
+	if err = copyFile(loc, srcFP); err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Unlink(loc)
+
+	successVer, err := loader.version(srcFP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Infof("successVer: %v", successVer)
+
+	locPath := "localFile://" + loc
+
+	if err = cli.Load(locPath); err != nil {
+		t.Fatal(err)
+	}
+
+	srcFP, err = filePath(cogPath("was_crashed"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	crashedVer, err := loader.version(srcFP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Infof("crashedVer: %v", crashedVer)
+
+	if err = copyFile(loc, srcFP); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = cli.ReloadChanged(); err != nil {
+		t.Fatal(err)
+	}
+
+	currVer, err := loader.version(srcFP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(currVer, cli.cogs[locPath].version) {
+		t.Errorf("Test TestReloadChanged: version not correct after ReloadChanged():\ngot: %v\nwant: %v\n", cli.cogs[locPath].version, currVer)
+	}
+}
+
+func copyFile(dst, src string) error {
+	if _, err := os.Stat(dst); err == nil {
+		if err := syscall.Unlink(dst); err != nil {
+			return err
+		}
+	}
+	s, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("could not open source file %q: %s", s.Name(), err)
+	}
+	defer s.Close()
+
+	d, err := os.OpenFile(dst, os.O_CREATE+os.O_RDWR+os.O_EXCL, 0700)
+	if err != nil {
+		return fmt.Errorf("could not open destination file %q: %s", d.Name(), err)
+	}
+
+	defer d.Close()
+
+	_, err = io.Copy(d, s)
+	return err
 }
