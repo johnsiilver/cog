@@ -3,6 +3,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -14,10 +15,10 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"google.golang.org/grpc"
-
 	pb "github.com/johnsiilver/cog/proto/cog"
 	"github.com/pborman/uuid"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 // CogCrashError indicates the error is because the Cog crashed.
@@ -28,6 +29,7 @@ func (c CogCrashError) Error() string {
 }
 
 type cogInfo struct {
+	cogPath  string
 	listener net.Listener
 	cmd      *exec.Cmd
 	client   pb.CogServiceClient
@@ -35,6 +37,7 @@ type cogInfo struct {
 	cancel   context.CancelFunc
 	wg       *sync.WaitGroup
 	token    []byte
+	version  []byte
 }
 
 // Client is used to access Cog plugins.
@@ -62,6 +65,39 @@ func (c *Client) Loaded(cogPath string) bool {
 	defer c.loadingMu.Unlock()
 	_, ok := c.cogs[cogPath]
 	return ok
+}
+
+// ReloadChanged reloads any plugins from source that have changed.
+func (c *Client) ReloadChanged() error {
+	c.cogsMu.Lock()
+	var g errgroup.Group
+	for _, cogi := range c.cogs {
+		cogi := cogi
+		g.Go(func() error {
+			load, err := lookupLoader(cogi.cogPath)
+			if err != nil {
+				return err
+			}
+			v, err := load.version(cogi.cogPath)
+			if err != nil {
+				return err
+			}
+			if bytes.Equal(cogi.version, v) {
+				if err := c.Unload(cogi.cogPath); err != nil {
+					return err
+				}
+				return c.Load(cogi.cogPath)
+			}
+			return nil
+		})
+	}
+	c.cogsMu.Unlock()
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Load loads a cog at "cogPath".
@@ -105,13 +141,18 @@ func (c *Client) Load(cogPath string) error {
 		return err
 	}
 
+	ver, err := load.version(cogPath)
+	if err != nil {
+		return err
+	}
+
 	fp, err := filePath(cogPath)
 	if err != nil {
 		return nil
 	}
 
 	localPath := path.Join(os.TempDir(), path.Base(fp))
-	if err = load(fp, localPath); err != nil {
+	if err = load.load(fp, localPath); err != nil {
 		return fmt.Errorf("problem copying Cog to local path: %s", err)
 	}
 
@@ -148,6 +189,7 @@ func (c *Client) Load(cogPath string) error {
 	}
 
 	ci := cogInfo{
+		cogPath:  cogPath,
 		listener: sInfo.listener,
 		cmd:      cmd,
 		client:   pb.NewCogServiceClient(conn),
@@ -155,6 +197,7 @@ func (c *Client) Load(cogPath string) error {
 		cancel:   cancel,
 		wg:       &sync.WaitGroup{},
 		token:    sInfo.token,
+		version:  ver,
 	}
 	go func() {
 		cmd.Wait()

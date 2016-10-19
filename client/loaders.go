@@ -1,6 +1,8 @@
 package client
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -15,13 +17,18 @@ var (
 )
 
 func init() {
-	register("localFile://", localLoader)
+	register("localFile://", localLoader{})
 }
 
-// loader copies a plugin from pluginPath to the localPath. pluginPath will
-// already have its header stripped.  The loader must set the localPath copy
-// to perm 0700.
-type loader func(cogPath, localPath string) error
+type loader interface {
+	// load loads the Cog at cogPath to the localPath.
+	load(cogPath, localPath string) error
+
+	// version retrieves the version of the Cog located at cogPath.  The verion is
+	// unique to the header type, so comparing the same plugin at two different
+	// header locations is not valid.
+	version(cogPath string) ([]byte, error)
+}
 
 // register a heder with a loader.  While we could just do this statically,
 // this makes sure we don't ship with a bad header.
@@ -63,7 +70,10 @@ func filePath(cogPath string) (string, error) {
 // localLoader copies a file from pluginPath to localPath.  If the localPath
 // already exists, it should simply stat the file and make sure it has perms
 // set to 0700.
-func localLoader(pluginPath, localPath string) error {
+type localLoader struct{}
+
+// load implements loader.load().
+func (localLoader) load(pluginPath, localPath string) error {
 	srcfi, err := os.Stat(pluginPath)
 	if err != nil {
 		return fmt.Errorf("source file %q is unaccessible: %s", pluginPath, err)
@@ -95,4 +105,22 @@ func localLoader(pluginPath, localPath string) error {
 
 	_, err = io.Copy(dst, src)
 	return err
+}
+
+// version implements loader.version().
+func (localLoader) version(cogPath string) ([]byte, error) {
+	stat, err := os.Stat(cogPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not stat file %q: %s", cogPath, err)
+	}
+
+	if stat.IsDir() {
+		return nil, fmt.Errorf("cogPath cannot be a directory")
+	}
+
+	buff := new(bytes.Buffer)
+	if err := binary.Write(buff, binary.BigEndian, stat.Size()); err != nil {
+		return nil, err
+	}
+	return buff.Bytes(), nil
 }

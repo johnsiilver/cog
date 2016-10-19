@@ -25,7 +25,7 @@ func TestLocalLoader(t *testing.T) {
 	}
 	defer os.Remove(src)
 
-	if err := localLoader(src, dst); err != nil {
+	if err := (localLoader{}).load(src, dst); err != nil {
 		t.Fatalf("TestLocalLoader: unexpected error: %s", err)
 	}
 	defer os.Remove(dst)
