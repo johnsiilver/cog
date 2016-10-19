@@ -18,7 +18,7 @@ enum Status {
 
 enum ArgsType {
   // The arguements are encoded in an unknown format.
-  UNKNOWN = 0;
+  AT_UNKNOWN = 0;
 
   // The arguments will be encoded in JSON format.
   JSON = 1;
