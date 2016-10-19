@@ -56,6 +56,14 @@ func New() (*Client, error) {
 	}, nil
 }
 
+// Loaded returns if cogPath is loaded.
+func (c *Client) Loaded(cogPath string) bool {
+	c.loadingMu.Lock()
+	defer c.loadingMu.Unlock()
+	_, ok := c.cogs[cogPath]
+	return ok
+}
+
 // Load loads a cog at "cogPath".
 func (c *Client) Load(cogPath string) error {
 	// Prevent any other loads while we get a lock for loading this specific plugin.
