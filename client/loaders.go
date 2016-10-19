@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -73,19 +74,31 @@ func filePath(cogPath string) (string, error) {
 type localLoader struct{}
 
 // load implements loader.load().
-func (localLoader) load(pluginPath, localPath string) error {
-	srcfi, err := os.Stat(pluginPath)
+func (l localLoader) load(pluginPath, localPath string) error {
+	_, err := os.Stat(pluginPath)
 	if err != nil {
 		return fmt.Errorf("source file %q is unaccessible: %s", pluginPath, err)
 	}
 
+	srcVer, err := l.version(pluginPath)
+	if err != nil {
+		return err
+	}
+
 	fi, _ := os.Stat(localPath)
-	if fi != nil && fi.Size() == srcfi.Size() {
-		if err = os.Chmod(localPath, 0700); err != nil {
+	if fi != nil {
+		dstVer, err := l.version(localPath)
+		if err != nil {
 			return err
 		}
-		return nil
-	} else if fi != nil {
+		// If the versions are equal, just chmod the one there and do nothing.
+		// Otherwise unlink it so we can copy the new version.
+		if bytes.Equal(srcVer, dstVer) {
+			if err = os.Chmod(localPath, 0700); err != nil {
+				return err
+			}
+			return nil
+		}
 		if err = syscall.Unlink(localPath); err != nil {
 			return err
 		}
