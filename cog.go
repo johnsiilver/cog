@@ -262,7 +262,7 @@ func (s *service) Validate(ctx context.Context, req *pb.ValidateRequest) (*pb.Va
 	if err := s.plugin.Validate(args); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return &pb.ValidateResponse{}, nil
 }
 
 // inArgs translates in.Args textual representation into the proto.Message.

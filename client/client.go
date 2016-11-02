@@ -111,13 +111,10 @@ func (c *Client) Load(cogPath string) error {
 	c.loadingMu.Lock()
 
 	// Check to see if anyone loaded this plugin while we waited for the loadingMu.Lock().
-	c.cogsMu.Lock()
-	if _, ok := c.cogs[cogPath]; ok {
-		c.cogsMu.Unlock()
+	if _, ok := c.cogExist(cogPath); ok {
 		c.loadingMu.Unlock()
 		return nil
 	}
-	c.cogsMu.Unlock()
 
 	// Now get a cogPath specific lock.
 	cogLock, ok := c.loadingLocks[cogPath]
@@ -133,12 +130,10 @@ func (c *Client) Load(cogPath string) error {
 	}()
 
 	// Check one more time to make sure no one sneaked a load in on the cogLock.
-	c.cogsMu.Lock()
-	if _, ok := c.cogs[cogPath]; ok {
+	if _, ok := c.cogExist(cogPath); ok {
 		c.loadingMu.Unlock()
 		return nil
 	}
-	c.cogsMu.Unlock()
 	c.loadingMu.Unlock()
 
 	load, err := lookupLoader(cogPath)
@@ -257,11 +252,13 @@ func (c *Client) Execute(ctx context.Context, cogPath, realUser string, args []b
 		server = &pb.Server{}
 	}
 
+	log.Infof("before getCog")
 	co, err := c.getCog(cogPath, false)
 	if err != nil {
 		return pb.Status_UNKNOWN, nil, err
 	}
-
+	log.Infof("after getCog")
+	co.wg.Add(1)
 	resp, err := co.client.Execute(
 		ctx,
 		&pb.ExecuteRequest{
@@ -283,6 +280,7 @@ func (c *Client) Execute(ctx context.Context, cogPath, realUser string, args []b
 			c.Unload(cogPath)
 			return pb.Status_UNKNOWN, nil, CogCrashError(fmt.Sprintf("cog exited unexpectedly: %s", err))
 		}
+		log.Infof("before return")
 		return pb.Status_UNKNOWN, nil, err
 	}
 	return resp.Out.Status, resp.Out.Output, nil
@@ -296,6 +294,7 @@ func (c *Client) Validate(ctx context.Context, cogPath string, args []byte, args
 		return err
 	}
 
+	co.wg.Add(1)
 	_, err = co.client.Validate(
 		ctx,
 		&pb.ValidateRequest{
@@ -318,6 +317,8 @@ func (c *Client) Describe(ctx context.Context, cogPath string) (*pb.Description,
 		return nil, err
 	}
 
+	co.wg.Add(1)
+	defer co.wg.Done()
 	resp, err := co.client.Describe(ctx, &pb.DescribeRequest{}, grpc.FailFast(true))
 	if err != nil {
 		return nil, err
@@ -329,31 +330,41 @@ func (c *Client) Describe(ctx context.Context, cogPath string) (*pb.Description,
 func (c *Client) getCog(cogPath string, load bool) (cogInfo, error) {
 	// This funky lock crap is because we must hold the lock in order to
 	// prevent an Unload() by anyone else before we increment the cogInfo.WaitGroup.
-	c.cogsMu.Lock()
-	co, ok := c.cogs[cogPath]
+	log.Infof("before cogExist()")
+	co, ok := c.cogExist(cogPath)
+	log.Infof("after cogExist()")
 	if !ok {
-		c.cogsMu.Unlock()
 		if load {
+			log.Infof("before c.Load()")
 			if err := c.Load(cogPath); err != nil {
 				return cogInfo{}, err
-			}
-			c.cogsMu.Lock()
-			co, ok = c.cogs[cogPath]
-			if !ok {
-				return cogInfo{}, fmt.Errorf("attempted load of cog, but it must have crashed")
 			}
 		} else {
 			return cogInfo{}, fmt.Errorf("cog %q is not loaded", cogPath)
 		}
+		log.Infof("before c.cogExist()")
+		co, ok = c.cogExist(cogPath)
+		if !ok {
+			return cogInfo{}, fmt.Errorf("attempted load of cog, but it must have crashed")
+		}
+		return co, nil
 	}
+
+	// If the ProcessState != nil, this is an indication that the plugin died.
 	if co.cmd.ProcessState != nil {
-		c.cogsMu.Unlock()
+		log.Infof("before c.Unload()")
 		c.Unload(cogPath)
 		return cogInfo{}, CogCrashError("cog exited unexpectedly")
 	}
-	co.wg.Add(1)
-	c.cogsMu.Unlock()
 	return co, nil
+}
+
+func (c *Client) cogExist(cogPath string) (cogInfo, bool) {
+	c.cogsMu.Lock()
+	defer c.cogsMu.Unlock()
+
+	co, ok := c.cogs[cogPath]
+	return co, ok
 }
 
 type socketInfo struct {
