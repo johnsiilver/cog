@@ -31,7 +31,7 @@ type loader interface {
 	version(cogPath string) ([]byte, error)
 }
 
-// register a heder with a loader.  While we could just do this statically,
+// register a header with a loader.  While we could just do this statically,
 // this makes sure we don't ship with a bad header.
 func register(header string, l loader) {
 	if !validHeader.MatchString(header) {

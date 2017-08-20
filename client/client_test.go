@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path"
 	"syscall"
 	"testing"
@@ -69,9 +70,14 @@ func TestExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	u, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	for _, test := range tests {
 		if test.load {
-			if err := cli.Load(test.cog); err != nil {
+			if err := cli.Load(test.cog, SUDO(u.Username), Flag("--logtostderr")); err != nil {
 				t.Fatalf("Test %q: %s", test.desc, err)
 			}
 		}

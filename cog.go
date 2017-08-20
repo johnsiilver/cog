@@ -341,7 +341,21 @@ func Start(c Cog, opts ...StartOption) error {
 
 	s.socket()
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:0"))
+	ipv4, ipv6, err := ipSupport()
+	if err != nil {
+		return fmt.Errorf("problem determining IP version support: %s", err)
+	}
+
+	local := ""
+	if ipv4 {
+		log.Infof("using localhost IPv4")
+		local = "localhost:0"
+	} else if ipv6 {
+		log.Infof("using localhost IPv6")
+		local = "[::1]:0"
+	}
+
+	lis, err := net.Listen("tcp", local)
 	if err != nil {
 		return fmt.Errorf("cog failed to listen: %v", err)
 	}
@@ -397,6 +411,45 @@ func Start(c Cog, opts ...StartOption) error {
 	}()
 
 	return nil
+}
+
+var netInterfaces = net.Interfaces
+
+// ipSupport determines if we support IPv4 and IPv6 loopback support.
+// NOTE: There is no test here because net.Interfaces is untestable.  It has
+// an .Addrs() method that returns a hidden global variable.  That obscures
+// testing because we cannot fake that method's results without adding a lot of
+// abstraction that isn't worth the trouble.
+func ipSupport() (ipv4, ipv6 bool, err error) {
+	ifaces, err := netInterfaces()
+	if err != nil {
+		return false, false, err
+	}
+
+	for _, i := range ifaces {
+		if i.Flags&net.FlagLoopback != 0 {
+			addrs, err := i.Addrs()
+			if err != nil {
+				return false, false, err
+			}
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+
+				if ip.To4() == nil {
+					ipv6 = true
+				} else {
+					ipv4 = true
+				}
+			}
+		}
+	}
+	return ipv6, ipv6, nil
 }
 
 // validateDescribe validates that the plugin has pluginerly used the

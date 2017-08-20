@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,29 @@ type CogCrashError string
 
 func (c CogCrashError) Error() string {
 	return string(c)
+}
+
+// loadOptions holds options that are used to load a Cog binary.
+type loadOptions struct {
+	sudo  string
+	flags []string
+}
+
+// LoadOption provides options for loading a Cog.
+type LoadOption func(l *loadOptions)
+
+// SUDO tells the loader to attempt to load the plugin as user "u".
+func SUDO(u string) LoadOption {
+	return func(l *loadOptions) {
+		l.sudo = u
+	}
+}
+
+// Flag passes a flag to the Cog during loading.
+func Flag(f string) LoadOption {
+	return func(l *loadOptions) {
+		l.flags = append(l.flags, f)
+	}
 }
 
 type cogInfo struct {
@@ -106,9 +130,14 @@ func (c *Client) ReloadChanged() error {
 }
 
 // Load loads a cog at "cogPath".
-func (c *Client) Load(cogPath string) error {
+func (c *Client) Load(cogPath string, options ...LoadOption) error {
 	// Prevent any other loads while we get a lock for loading this specific plugin.
 	c.loadingMu.Lock()
+
+	opts := &loadOptions{}
+	for _, mod := range options {
+		mod(opts)
+	}
 
 	// Check to see if anyone loaded this plugin while we waited for the loadingMu.Lock().
 	if _, ok := c.cogExist(cogPath); ok {
@@ -160,7 +189,13 @@ func (c *Client) Load(cogPath string) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	cmd := exec.CommandContext(ctx, localPath, socketAddr, "--alsologtostderr")
+	cmdStr := fmt.Sprintf("%s %s %s", localPath, socketAddr, strings.Join(opts.flags, " "))
+	if opts.sudo != "" {
+		cmdStr = fmt.Sprintf("sudo -u %s %s", opts.sudo, cmdStr)
+	}
+
+	log.Infof("launching binary with command %q", cmdStr)
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", cmdStr)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err = cmd.Start(); err != nil {
