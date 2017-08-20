@@ -151,12 +151,3 @@ func TestCog(t *testing.T) {
 		t.Fatalf("got %q, want %q", out.Say, "hello")
 	}
 }
-
-type fakeNetInterfaces struct {
-	i   []net.Interface
-	err error
-}
-
-func (f *fakeNetInterfaces) Interfaces() ([]net.Interface, error) {
-	return f.i, f.err
-}
