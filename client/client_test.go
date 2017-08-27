@@ -14,6 +14,8 @@ import (
 
 	"github.com/gogo/protobuf/jsonpb"
 	log "github.com/golang/glog"
+	"github.com/johnsiilver/cog/client/loaders"
+	"github.com/johnsiilver/cog/client/loaders/local"
 	pb "github.com/johnsiilver/cog/proto/cog"
 	tpb "github.com/johnsiilver/cog/proto/test"
 	"github.com/kylelemons/godebug/pretty"
@@ -75,14 +77,15 @@ func TestExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ctx := context.Background()
 	for _, test := range tests {
 		if test.load {
-			if err := cli.Load(test.cog, SUDO(u.Username), Flag("--logtostderr")); err != nil {
+			if err := cli.Load(ctx, test.cog, SUDO(u.Username), Flag("--logtostderr")); err != nil {
 				t.Fatalf("Test %q: %s", test.desc, err)
 			}
 		}
 
-		status, out, err := cli.Execute(context.Background(), test.cog, "", []byte("{}"), pb.ArgsType_JSON, nil)
+		status, out, err := cli.Execute(ctx, test.cog, "", []byte("{}"), pb.ArgsType_JSON, nil)
 		switch {
 		case test.err && err == nil:
 			t.Errorf("Test %q: got err == nil, want err != nil", test.desc)
@@ -106,12 +109,14 @@ func TestExecute(t *testing.T) {
 }
 
 func TestUnload(t *testing.T) {
+	ctx := context.Background()
+
 	cli, err := New()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := cli.Load(cogPath("success")); err != nil {
+	if err := cli.Load(ctx, cogPath("success")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,13 +145,15 @@ func TestUnload(t *testing.T) {
 }
 
 func TestReloadChanged(t *testing.T) {
-	loader := localLoader{}
+	ctx := context.Background()
+
+	loader := local.Loader{}
 	cli, err := New()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	srcFP, err := filePath(cogPath("success"))
+	srcFP, err := loaders.FilePath(cogPath("success"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +163,7 @@ func TestReloadChanged(t *testing.T) {
 	}
 	defer syscall.Unlink(loc)
 
-	successVer, err := loader.version(srcFP)
+	successVer, err := loader.Version(ctx, srcFP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,16 +171,16 @@ func TestReloadChanged(t *testing.T) {
 
 	locPath := "localFile://" + loc
 
-	if err = cli.Load(locPath); err != nil {
+	if err = cli.Load(ctx, locPath); err != nil {
 		t.Fatal(err)
 	}
 
-	srcFP, err = filePath(cogPath("was_crashed"))
+	srcFP, err = loaders.FilePath(cogPath("was_crashed"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	crashedVer, err := loader.version(srcFP)
+	crashedVer, err := loader.Version(ctx, srcFP)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,11 +190,11 @@ func TestReloadChanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = cli.ReloadChanged(); err != nil {
+	if err = cli.ReloadChanged(ctx); err != nil {
 		t.Fatal(err)
 	}
 
-	currVer, err := loader.version(srcFP)
+	currVer, err := loader.Version(ctx, srcFP)
 	if err != nil {
 		t.Fatal(err)
 	}

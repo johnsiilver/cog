@@ -1,7 +1,8 @@
-package client
+package local
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"os"
 	"path"
@@ -10,12 +11,13 @@ import (
 	"github.com/kylelemons/godebug/pretty"
 )
 
-func TestLocalLoader(t *testing.T) {
+func TestLocal(t *testing.T) {
 	const (
 		out     = "hello world"
 		srcName = "src"
 		dstName = "dst"
 	)
+	ctx := context.Background()
 
 	src := path.Join(os.TempDir(), srcName)
 	dst := path.Join(os.TempDir(), dstName)
@@ -25,7 +27,7 @@ func TestLocalLoader(t *testing.T) {
 	}
 	defer os.Remove(src)
 
-	if err := (localLoader{}).load(src, dst); err != nil {
+	if err := (Loader{}).Load(ctx, src, dst); err != nil {
 		t.Fatalf("TestLocalLoader: unexpected error: %s", err)
 	}
 	defer os.Remove(dst)

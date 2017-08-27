@@ -16,6 +16,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/johnsiilver/cog/client/loaders"
 	pb "github.com/johnsiilver/cog/proto/cog"
 	"github.com/pborman/uuid"
 	"golang.org/x/sync/errgroup"
@@ -92,21 +93,21 @@ func (c *Client) Loaded(cogPath string) bool {
 }
 
 // ReloadChanged reloads any plugins from source that have changed.
-func (c *Client) ReloadChanged() error {
+func (c *Client) ReloadChanged(ctx context.Context) error {
 	c.cogsMu.Lock()
 	var g errgroup.Group
 	for _, cogi := range c.cogs {
 		cogi := cogi
 		g.Go(func() error {
-			load, err := lookupLoader(cogi.cogPath)
+			load, err := loaders.Lookup(cogi.cogPath)
 			if err != nil {
 				return err
 			}
-			fp, err := filePath(cogi.cogPath)
+			fp, err := loaders.FilePath(cogi.cogPath)
 			if err != nil {
 				return nil
 			}
-			v, err := load.version(fp)
+			v, err := load.Version(ctx, fp)
 			if err != nil {
 				return err
 			}
@@ -115,7 +116,7 @@ func (c *Client) ReloadChanged() error {
 				if err := c.Unload(cogi.cogPath); err != nil {
 					return err
 				}
-				return c.Load(cogi.cogPath)
+				return c.Load(ctx, cogi.cogPath)
 			}
 			return nil
 		})
@@ -130,7 +131,7 @@ func (c *Client) ReloadChanged() error {
 }
 
 // Load loads a cog at "cogPath".
-func (c *Client) Load(cogPath string, options ...LoadOption) error {
+func (c *Client) Load(ctx context.Context, cogPath string, options ...LoadOption) error {
 	// Prevent any other loads while we get a lock for loading this specific plugin.
 	c.loadingMu.Lock()
 
@@ -165,23 +166,23 @@ func (c *Client) Load(cogPath string, options ...LoadOption) error {
 	}
 	c.loadingMu.Unlock()
 
-	load, err := lookupLoader(cogPath)
+	load, err := loaders.Lookup(cogPath)
 	if err != nil {
 		return err
 	}
 
-	fp, err := filePath(cogPath)
+	fp, err := loaders.FilePath(cogPath)
 	if err != nil {
 		return nil
 	}
 
-	ver, err := load.version(fp)
+	ver, err := load.Version(ctx, fp)
 	if err != nil {
 		return err
 	}
 
 	localPath := path.Join(os.TempDir(), path.Base(fp))
-	if err = load.load(fp, localPath); err != nil {
+	if err = load.Load(ctx, fp, localPath); err != nil {
 		return fmt.Errorf("problem copying Cog to local path: %s", err)
 	}
 
@@ -288,7 +289,7 @@ func (c *Client) Execute(ctx context.Context, cogPath, realUser string, args []b
 	}
 
 	log.Infof("before getCog")
-	co, err := c.getCog(cogPath, false)
+	co, err := c.getCog(ctx, cogPath, false)
 	if err != nil {
 		return pb.Status_UNKNOWN, nil, err
 	}
@@ -324,7 +325,7 @@ func (c *Client) Execute(ctx context.Context, cogPath, realUser string, args []b
 // Validate validates that the args with the Cog's Validate method. If the cog
 // is not loaded it will be loaded.
 func (c *Client) Validate(ctx context.Context, cogPath string, args []byte, argsType pb.ArgsType) error {
-	co, err := c.getCog(cogPath, true)
+	co, err := c.getCog(ctx, cogPath, true)
 	if err != nil {
 		return err
 	}
@@ -347,7 +348,7 @@ func (c *Client) Validate(ctx context.Context, cogPath string, args []byte, args
 
 // Describe returns a description of the Cog.
 func (c *Client) Describe(ctx context.Context, cogPath string) (*pb.Description, error) {
-	co, err := c.getCog(cogPath, true)
+	co, err := c.getCog(ctx, cogPath, true)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +363,7 @@ func (c *Client) Describe(ctx context.Context, cogPath string) (*pb.Description,
 	return resp.Description, nil
 }
 
-func (c *Client) getCog(cogPath string, load bool) (cogInfo, error) {
+func (c *Client) getCog(ctx context.Context, cogPath string, load bool) (cogInfo, error) {
 	// This funky lock crap is because we must hold the lock in order to
 	// prevent an Unload() by anyone else before we increment the cogInfo.WaitGroup.
 	log.Infof("before cogExist()")
@@ -371,7 +372,7 @@ func (c *Client) getCog(cogPath string, load bool) (cogInfo, error) {
 	if !ok {
 		if load {
 			log.Infof("before c.Load()")
-			if err := c.Load(cogPath); err != nil {
+			if err := c.Load(ctx, cogPath); err != nil {
 				return cogInfo{}, err
 			}
 		} else {
