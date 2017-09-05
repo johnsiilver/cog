@@ -161,6 +161,9 @@ type Cog interface {
 	// ID is the id of the calling Labor.
 	Execute(ctx context.Context, args proto.Message, realUser, endpoint, id string) (Out, error)
 
+	// Stream is used to receive streaming
+	//Stream(ctx context.Contex, args proto.Message, realUser, endpoint, id string) (chan Out, error)
+
 	// Describe details information about the plugin along with usage restrictions.
 	Describe() *pb.Description
 
@@ -193,7 +196,24 @@ type service struct {
 	token []byte
 }
 
-func (s *service) Execute(ctx context.Context, req *pb.ExecuteRequest) (*pb.ExecuteResponse, error) {
+func (s *service) Execute(stream pb.CogService_ExecuteServer) error {
+	req, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+
+	resp, err := s.execute(stream.Context(), req)
+	if err != nil {
+		return err
+	}
+
+	if err := stream.Send(resp); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *service) execute(ctx context.Context, req *pb.ExecuteRequest) (*pb.ExecuteResponse, error) {
 	if !bytes.Equal(req.Token, s.token) {
 		panic("expected security token was not present from the client.  Third party hack attempt likely.")
 	}
