@@ -127,12 +127,8 @@ func TestCog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := client.Execute(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = stream.Send(
+	resp, err := client.Execute(
+		context.Background(),
 		&pb.ExecuteRequest{
 			Args: &pb.Args{
 				ArgsType: pb.ArgsType_JSON,
@@ -142,11 +138,6 @@ func TestCog(t *testing.T) {
 			Token:  tok,
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp, err := stream.Recv()
 	if err != nil {
 		t.Fatal(err)
 	}

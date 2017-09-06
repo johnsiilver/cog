@@ -118,7 +118,7 @@ message ValidateResponse {};
 
 service CogService {
   // Executes the cog.
-  rpc Execute(stream ExecuteRequest) returns (stream ExecuteResponse) {};
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse) {};
 
   // Describes the cog.
   rpc Describe(DescribeRequest) returns (DescribeResponse) {};

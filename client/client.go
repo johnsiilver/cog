@@ -288,20 +288,15 @@ func (c *Client) Execute(ctx context.Context, cogPath, realUser string, args []b
 		server = &pb.Server{}
 	}
 
+	log.Infof("before getCog")
 	co, err := c.getCog(ctx, cogPath, false)
 	if err != nil {
 		return pb.Status_UNKNOWN, nil, err
 	}
-
+	log.Infof("after getCog")
 	co.wg.Add(1)
-
-	stream, err := co.client.Execute(ctx, grpc.FailFast(true))
-	if err != nil {
-		return pb.Status_FAILURE_NO_RETRIES, nil, err
-	}
-	defer stream.CloseSend()
-
-	err = stream.Send(
+	resp, err := co.client.Execute(
+		ctx,
 		&pb.ExecuteRequest{
 			Args: &pb.Args{
 				Args:     args,
@@ -311,13 +306,8 @@ func (c *Client) Execute(ctx context.Context, cogPath, realUser string, args []b
 			Server:   server,
 			Token:    co.token,
 		},
+		grpc.FailFast(true),
 	)
-	if err != nil {
-		co.wg.Done() // TODO(johnsiilver): This is bad form, go back and refactor.
-		return pb.Status_FAILURE, nil, err
-	}
-
-	resp, err := stream.Recv()
 	co.wg.Done()
 
 	if err != nil {

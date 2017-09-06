@@ -5,28 +5,22 @@ unix port to listen on.  The plugin then brings up a GRPC service and
 communicates what port it comes up on via the unix socket back to the caller.  A
 security token is also exchanged to the client, which must used the token in
 all GRPC communication with the plugin.
-
 Cog plugins receive a proto.Message as its input.  They write back a
 proto.Message that is sent back to the caller along with a status message and
 optionally a pretty print message for display in things like a browser.
-
 These plugins can then be dynamically loaded by calling applications and
 provide hitless upgrades to various software stacks.
-
 Here is a simple example that simply writes a status message of success back
 to the caller:
-
 	// cog merely implements the Cog interface called Cog.  The interface requires
 	// Execute()/Describe()/Validate()/ArgsProto().
 	type cog struct {}
-
 	// Execute receives its arguments via "args", "out" represents the results of
 	// the Cog's run.
 	func (*cog) Execute(ctx context.Context, args proto.Message, out *pb.Out) error
 		out.Status = pb.SUCCESS
 		return nil
 	}
-
 	// Describe returns information about the plugin, including permissions and
 	// tags to allow searching via an online repository.
 	func (*cog) Describe() *pb.Description {
@@ -36,7 +30,6 @@ to the caller:
 			Tags: []string{"example"},
 		}
 	}
-
 	// Validate validates the arguments that are sent or may be sent to
 	// the plugin. Validate is always called during Execute(). You should never
 	// invoke this in your code.
@@ -45,21 +38,17 @@ to the caller:
 	  // Check your arguments are valid here.
 		return nil
 	}
-
   // ArgsProto returns a blank copy of the argument proto you define. This
 	// allows the Cog middleware to marshal/unmarshal JSON or Proto that is in
 	// []byte form into your arguments. This saves you a lot of time and bother.
   func (*cog) ArgsProto() proto.Message {
     return &myproto.Args{}
   }
-
 	func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
-
 		if err := Start(&cog{}); err != nil {
 			panic(err)
 		}
-
 		select{}
 	}
 */
@@ -161,9 +150,6 @@ type Cog interface {
 	// ID is the id of the calling Labor.
 	Execute(ctx context.Context, args proto.Message, realUser, endpoint, id string) (Out, error)
 
-	// Stream is used to receive streaming
-	//Stream(ctx context.Contex, args proto.Message, realUser, endpoint, id string) (chan Out, error)
-
 	// Describe details information about the plugin along with usage restrictions.
 	Describe() *pb.Description
 
@@ -196,24 +182,7 @@ type service struct {
 	token []byte
 }
 
-func (s *service) Execute(stream pb.CogService_ExecuteServer) error {
-	req, err := stream.Recv()
-	if err != nil {
-		return err
-	}
-
-	resp, err := s.execute(stream.Context(), req)
-	if err != nil {
-		return err
-	}
-
-	if err := stream.Send(resp); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (s *service) execute(ctx context.Context, req *pb.ExecuteRequest) (*pb.ExecuteResponse, error) {
+func (s *service) Execute(ctx context.Context, req *pb.ExecuteRequest) (*pb.ExecuteResponse, error) {
 	if !bytes.Equal(req.Token, s.token) {
 		panic("expected security token was not present from the client.  Third party hack attempt likely.")
 	}
