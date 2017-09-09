@@ -68,11 +68,13 @@ message Description {
 
 // Server details information about the service that called the cog.
 message Server {
-  // Represents a service endpoint that ran the cog.
-  string endpoint = 1;
+  // Represents the service endpoint that ran the cog.
+  string marmot_endpoint = 1;
 
-  // The id of the Labor executing the plugin.
-  string id = 2;
+  // Represents the service point that Cogs can use to communicate with Marmot's
+  // services exposed only to Cogs. Services such as the configuraiton Key/Value
+  // store.
+  string cog_endpoint = 2;
 };
 
 // ExecuteRequest holds the request for a Cog to do something.

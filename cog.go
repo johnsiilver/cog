@@ -144,11 +144,11 @@ func (o Out) toProto(t pb.ArgsType) (*pb.Out, error) {
 // Cog represents the interface that all Cog plugins must satisfy.
 type Cog interface {
 	// Execute is used to execute the plugin.
-	// Args is the arguments to the plugin.
-	// RealUser is the user that the called the plugin.
-	// Endpoint is the service endpoint that is calling the plugin.
-	// ID is the id of the calling Labor.
-	Execute(ctx context.Context, args proto.Message, realUser, endpoint, id string) (Out, error)
+	// args is the arguments to the plugin.
+	// realUser is the user that the called the plugin.
+	// marmotEndpoint is the service endpoint that is calling the plugin.
+	// cogEndpoint is the Cog endpoint the Cog can utilize to get things from the server.
+	Execute(ctx context.Context, args proto.Message, realUser, marmotEndpoint, cogEndpoint string) (Out, error)
 
 	// Describe details information about the plugin along with usage restrictions.
 	Describe() *pb.Description
@@ -202,7 +202,7 @@ func (s *service) Execute(ctx context.Context, req *pb.ExecuteRequest) (*pb.Exec
 	done := make(chan error, 1)
 	go func() {
 		defer close(done)
-		out, err = s.plugin.Execute(ctx, args, req.RealUser, req.Server.Endpoint, req.Server.Id)
+		out, err = s.plugin.Execute(ctx, args, req.RealUser, req.Server.MarmotEndpoint, req.Server.CogEndpoint)
 		if err != nil {
 			done <- err
 		}
